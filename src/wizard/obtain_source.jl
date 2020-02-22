@@ -321,40 +321,53 @@ function obtain_source(state::WizardState)
     println(state.outs)
 end
 
-function get_name_and_version(state::WizardState)
-    yggdrasil_path = get_yggdrasil()
-
-    while state.name === nothing
-        msg = "Enter a name for this project.  This will be used for filenames:"
-        new_name = nonempty_line_prompt("Name", msg; ins=state.ins, outs=state.outs)
-
-        if !Base.isidentifier(new_name)
-            println(state.outs, "\"$(new_name)\" is an invalid identifier. Try again.")
-            continue
+function with_yggdrasil_master(f)
+    mktempdir() do yggdrasil_path
+        LibGit2.with(LibGit2.GitRepo(get_yggdrasil())) do repo
+            opts = LibGit2.CheckoutOptions(
+                checkout_strategy = LibGit2.Consts.CHECKOUT_FORCE,
+                target_directory = Base.unsafe_convert(Cstring, yggdrasil_path)
+            )
+            LibGit2.checkout_tree(repo, LibGit2.GitObject(repo, "remotes/origin/master"), options=opts)
         end
-
-        # Check to see if this project name already exists
-        if case_insensitive_file_exists(joinpath(yggdrasil_path, yggdrasil_build_tarballs_path(new_name)))
-            println(state.outs, "A build recipe with that name already exists within Yggdrasil.")
-
-            if yn_prompt(state, "Choose a new project name?", :y) == :n
-                break
-            end
-        else
-            state.name = new_name
-        end
+        f(yggdrasil_path)
     end
+end
 
-    msg = "Enter a version number for this project:"
-    while state.version === nothing
-        try
-            state.version = VersionNumber(nonempty_line_prompt("Version", msg; ins=state.ins, outs=state.outs))
-        catch e
-            if isa(e, ArgumentError)
-                println(state.outs, e.msg)
+function get_name_and_version(state::WizardState)
+    with_yggdrasil_master() do yggdrasil_path
+        while state.name === nothing
+            msg = "Enter a name for this project.  This will be used for filenames:"
+            new_name = nonempty_line_prompt("Name", msg; ins=state.ins, outs=state.outs)
+
+            if !Base.isidentifier(new_name)
+                println(state.outs, "\"$(new_name)\" is an invalid identifier. Try again.")
                 continue
             end
-            rethrow(e)
+
+            # Check to see if this project name already exists
+            if case_insensitive_file_exists(joinpath(yggdrasil_path, yggdrasil_build_tarballs_path(new_name)))
+                println(state.outs, "A build recipe with that name already exists within Yggdrasil.")
+
+                if yn_prompt(state, "Choose a new project name?", :y) == :n
+                    break
+                end
+            else
+                state.name = new_name
+            end
+        end
+
+        msg = "Enter a version number for this project:"
+        while state.version === nothing
+            try
+                state.version = VersionNumber(nonempty_line_prompt("Version", msg; ins=state.ins, outs=state.outs))
+            catch e
+                if isa(e, ArgumentError)
+                    println(state.outs, e.msg)
+                    continue
+                end
+                rethrow(e)
+            end
         end
     end
 end
