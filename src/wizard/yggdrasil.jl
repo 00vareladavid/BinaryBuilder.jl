@@ -7,11 +7,15 @@ function get_yggdrasil()
 
     if !isdir(yggdrasil_dir)
         @info( "Cloning bare Yggdrasil into deps/Yggdrasil...")
-        LibGit2.clone("https://github.com/JuliaPackaging/Yggdrasil.git", yggdrasil_dir; isbare=true)
+        LibGit2.clone("https://github.com/JuliaPackaging/Yggdrasil.git", yggdrasil_dir)
     else
         if !yggdrasil_updated
             @info("Updating bare Yggdrasil clone in deps/Yggdrasil...")
-            LibGit2.fetch(LibGit2.GitRepo(yggdrasil_dir))
+            LibGit2.with(LibGit2.GitRepo(yggdrasil_dir)) do repo
+                LibGit2.fetch(repo)
+                master_hash = string(LibGit2.GitHash(LibGit2.GitObject(repo, "remotes/origin/master")))
+                LibGit2.checkout!(repo, master_hash)
+            end
         end
     end
     global yggdrasil_updated = true
